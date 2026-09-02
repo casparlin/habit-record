@@ -1,0 +1,173 @@
+<script setup>
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import LoginView from './components/LoginView.vue';
+import TodayPanel from './components/TodayPanel.vue';
+import Heatmap from './components/Heatmap.vue';
+import { demoMode, fetchCheckins, locallyAuthed, logout, saveCheckin } from './api.js';
+import { addDays, dayScore, emptyDay, localISODate, streakFrom } from './score.js';
+
+const today = localISODate();
+const authed = ref(false);
+const loading = ref(true);
+const saving = ref(false);
+const tab = ref('overview');
+const selectedDate = ref(today);
+const rows = ref({});
+let saveTimer = null;
+
+const TABS = [
+  { id: 'overview', label: '总览' },
+  { id: 'water', label: '喝水' },
+  { id: 'sleep', label: '早睡' },
+  { id: 'workout', label: '锻炼' },
+  { id: 'study', label: '晨学' }
+];
+
+const rangeFrom = addDays(today, -370);
+
+const selectedRow = computed(() => rows.value[selectedDate.value] || emptyDay(selectedDate.value));
+const streak = computed(() => streakFrom(rows.value, today, tab.value));
+const yearDays = computed(() => {
+  let n = 0;
+  for (let i = 0; i < 365; i++) {
+    const d = addDays(today, -i);
+    const row = rows.value[d];
+    if (row && dayScore(row) > 0) n += 1;
+  }
+  return { active: n };
+});
+
+async function load() {
+  loading.value = true;
+  try {
+    const list = await fetchCheckins(rangeFrom, today);
+    const map = {};
+    for (const row of list) map[row.date] = row;
+    rows.value = map;
+    authed.value = true;
+  } catch (err) {
+    if (err.status === 401) authed.value = false;
+  } finally {
+    loading.value = false;
+  }
+}
+
+function onLogin() {
+  authed.value = true;
+  load();
+}
+
+async function onLogout() {
+  await logout();
+  authed.value = false;
+}
+
+function updateRow(next) {
+  rows.value = { ...rows.value, [next.date]: next };
+  saving.value = true;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    try {
+      await saveCheckin(next);
+    } catch (err) {
+      if (err.status === 401) authed.value = false;
+    } finally {
+      saving.value = false;
+    }
+  }, 350);
+}
+
+watch(selectedDate, () => {
+  if (!rows.value[selectedDate.value]) {
+    rows.value = { ...rows.value, [selectedDate.value]: emptyDay(selectedDate.value) };
+  }
+});
+
+onMounted(() => {
+  if (demoMode && locallyAuthed()) authed.value = true;
+  if (authed.value || !demoMode) load();
+  else loading.value = false;
+});
+
+onUnmounted(() => clearTimeout(saveTimer));
+</script>
+
+<template>
+  <LoginView v-if="!authed && !loading" @success="onLogin" />
+  <div v-else-if="loading" class="grid min-h-screen place-items-center text-gh-muted">加载中…</div>
+  <div v-else class="mx-auto max-w-6xl px-4 py-6 md:py-8">
+    <header class="mb-5 flex items-center justify-between gap-3">
+      <div>
+        <h1 class="text-base font-semibold md:text-lg">习惯打卡</h1>
+        <p class="text-xs text-gh-muted">
+          {{ demoMode ? '本地预览模式 · 数据在浏览器' : '会话 30 天' }}
+          <span v-if="saving"> · 保存中</span>
+        </p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button
+          v-if="selectedDate !== today"
+          type="button"
+          class="rounded-md border border-gh-border px-2 py-1 text-xs text-gh-muted hover:text-gh-text"
+          @click="selectedDate = today"
+        >
+          回到今天
+        </button>
+        <button
+          type="button"
+          class="rounded-md border border-gh-border px-2 py-1 text-xs text-gh-muted hover:text-gh-text"
+          @click="onLogout"
+        >
+          退出
+        </button>
+      </div>
+    </header>
+
+    <TodayPanel :row="selectedRow" :today="today" @update="updateRow" />
+
+    <section class="mt-5 rounded-xl border border-gh-border bg-gh-panel p-4 md:p-5">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div class="flex flex-wrap gap-1 rounded-md border border-gh-border p-1">
+          <button
+            v-for="item in TABS"
+            :key="item.id"
+            type="button"
+            class="rounded px-2.5 py-1 text-xs md:text-sm"
+            :class="tab === item.id ? 'bg-[#21262d] text-white' : 'text-gh-muted hover:text-gh-text'"
+            @click="tab = item.id"
+          >
+            {{ item.label }}
+          </button>
+        </div>
+        <p class="text-xs text-gh-muted">
+          连续 {{ streak }} 天
+          <span class="mx-1">·</span>
+          近一年有记录 {{ yearDays.active }} 天
+        </p>
+      </div>
+
+      <p class="mt-3 text-sm text-gh-text">
+        <template v-if="tab === 'overview'">综合 · 颜色按当日总分 0–5</template>
+        <template v-else-if="tab === 'water'">喝水 · 蓝色深浅按 0–5 杯</template>
+        <template v-else>只看这一项有没有完成</template>
+      </p>
+
+      <div class="mt-4">
+        <Heatmap :tab="tab" :map="rows" :today="today" :selected="selectedDate" @select="selectedDate = $event" />
+      </div>
+
+      <div class="mt-3 flex items-center gap-2 text-[11px] text-gh-muted">
+        <span>少</span>
+        <span
+          v-for="(c, i) in tab === 'water'
+            ? ['#161b22', '#0c2d6b', '#0d419d', '#1158c7', '#1f6feb', '#58a6ff']
+            : ['#161b22', '#0e4429', '#006d32', '#26a641', '#3fb950', '#56d364']"
+          :key="i"
+          class="inline-block h-2.5 w-2.5 rounded-[2px] border border-[#1c2128]"
+          :style="{ background: c }"
+        />
+        <span>多</span>
+      </div>
+    </section>
+  </div>
+</template>
