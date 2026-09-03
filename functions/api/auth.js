@@ -3,7 +3,9 @@ import {
   issueSession,
   sessionCookieHeader,
   clearCookieHeader,
-  getAuthUserId
+  getAuthUserId,
+  getUserSecret,
+  configuredTokenCount
 } from '../_lib/auth.js';
 import { ensureSchema, getDisplayName, normalizeName, setDisplayName } from '../_lib/db.js';
 
@@ -36,7 +38,16 @@ export async function onRequestPost(context) {
   }
   const token = typeof body.token === 'string' ? body.token.trim() : '';
   const userId = await resolveUserId(token, env);
-  if (!userId) return json({ error: 'unauthorized' }, { status: 401 });
+  if (!userId) {
+    const configured = configuredTokenCount(env);
+    return json(
+      {
+        error: configured ? 'unauthorized' : 'no_tokens_configured',
+        configuredTokens: configured
+      },
+      { status: 401 }
+    );
+  }
   let displayName = `用户${userId}`;
   let dbError = null;
   if (!env.DB) {
@@ -47,7 +58,7 @@ export async function onRequestPost(context) {
     if (incoming) await setDisplayName(env.DB, userId, incoming);
     displayName = await getDisplayName(env.DB, userId);
   }
-  const secret = env[`SECRET_ACCESS_TOKEN_${userId}`];
+  const secret = getUserSecret(env, userId);
   const session = await issueSession(secret, userId);
   return json(
     { ok: true, userId, displayName, expiresInDays: 30, dbError },

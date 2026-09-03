@@ -14,8 +14,12 @@ async function submit() {
     const { login } = await import('../api.js');
     const result = await login(token.value.trim(), name.value.trim());
     emit('success', result || {});
-  } catch {
-    error.value = 'Token 不正确';
+  } catch (err) {
+    if (err?.code === 'no_tokens_configured' || err?.message === 'no_tokens_configured') {
+      error.value = 'Cloudflare 里还没配 Token 变量。请在 Pages → Settings → Variables and Secrets 加 SECRET_ACCESS_TOKEN_1（Production）';
+    } else {
+      error.value = 'Token 不正确，请和 Cloudflare 里的 SECRET_ACCESS_TOKEN_1 逐字对一下';
+    }
   } finally {
     loading.value = false;
   }

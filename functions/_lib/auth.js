@@ -31,18 +31,41 @@ export function parseCookie(header, name) {
   return '';
 }
 
+function cleanSecret(value) {
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+export function getUserSecret(env, userId) {
+  const direct = cleanSecret(env?.[`SECRET_ACCESS_TOKEN_${userId}`]);
+  if (direct) return direct;
+  if (String(userId) === '1') return cleanSecret(env?.SECRET_ACCESS_TOKEN);
+  return '';
+}
+
+export function configuredTokenCount(env) {
+  let n = 0;
+  if (cleanSecret(env?.SECRET_ACCESS_TOKEN)) n += 1;
+  for (let i = 1; i <= MAX_USERS; i++) {
+    if (cleanSecret(env?.[`SECRET_ACCESS_TOKEN_${i}`])) n += 1;
+  }
+  return n;
+}
+
 export async function tokenMatches(provided, secret) {
-  if (!provided || !secret) return false;
-  const a = new TextEncoder().encode(provided);
-  const b = new TextEncoder().encode(secret);
+  const aStr = cleanSecret(provided);
+  const bStr = cleanSecret(secret);
+  if (!aStr || !bStr) return false;
+  const a = new TextEncoder().encode(aStr);
+  const b = new TextEncoder().encode(bStr);
   return bytesEq(a, b);
 }
 
 export async function resolveUserId(token, env) {
-  if (!token || !env) return null;
+  const provided = cleanSecret(token);
+  if (!provided || !env) return null;
   for (let i = 1; i <= MAX_USERS; i++) {
-    const secret = env[`SECRET_ACCESS_TOKEN_${i}`];
-    if (secret && (await tokenMatches(token, secret))) return String(i);
+    const secret = getUserSecret(env, String(i));
+    if (secret && (await tokenMatches(provided, secret))) return String(i);
   }
   return null;
 }
@@ -65,7 +88,7 @@ export async function getAuthUserId(context) {
   if (!Number.isInteger(userNum) || userNum < 1 || userNum > MAX_USERS) return null;
   const exp = Number(expRaw);
   if (!Number.isFinite(exp) || exp < Math.floor(Date.now() / 1000)) return null;
-  const secret = env[`SECRET_ACCESS_TOKEN_${userId}`];
+  const secret = getUserSecret(env, String(userNum));
   if (!secret) return null;
   const expected = await hmacHex(secret, `habit-session:${userId}.${expRaw}`);
   const a = new TextEncoder().encode(sig);
