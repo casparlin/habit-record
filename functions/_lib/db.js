@@ -1,27 +1,3 @@
-export const CHECKINS_SCHEMA = `
-CREATE TABLE IF NOT EXISTS checkins (
-  user_id TEXT NOT NULL,
-  date TEXT NOT NULL,
-  water INTEGER NOT NULL DEFAULT 0,
-  sleep INTEGER NOT NULL DEFAULT 0,
-  workout INTEGER NOT NULL DEFAULT 0,
-  study INTEGER NOT NULL DEFAULT 0,
-  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-  PRIMARY KEY (user_id, date)
-);
-`;
-
-export const PROFILES_SCHEMA = `
-CREATE TABLE IF NOT EXISTS profiles (
-  user_id TEXT PRIMARY KEY,
-  display_name TEXT NOT NULL DEFAULT '',
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-`;
-
-export const SCHEMA = `${CHECKINS_SCHEMA}
-${PROFILES_SCHEMA}`;
-
 export function clampInt(value, min, max) {
   const n = Number(value);
   if (!Number.isFinite(n)) return min;
@@ -55,6 +31,10 @@ export function fallbackName(userId) {
   return `用户${userId}`;
 }
 
+async function run(db, sql) {
+  await db.prepare(sql).run();
+}
+
 async function tableColumns(db, table) {
   try {
     const { results } = await db.prepare(`PRAGMA table_info(${table})`).all();
@@ -65,26 +45,31 @@ async function tableColumns(db, table) {
 }
 
 export async function ensureSchema(db) {
-  await db.exec(PROFILES_SCHEMA);
-  await db.exec(CHECKINS_SCHEMA);
+  await run(
+    db,
+    'CREATE TABLE IF NOT EXISTS profiles (user_id TEXT PRIMARY KEY, display_name TEXT NOT NULL DEFAULT \'\', updated_at TEXT)'
+  );
+  await run(
+    db,
+    'CREATE TABLE IF NOT EXISTS checkins (user_id TEXT NOT NULL, date TEXT NOT NULL, water INTEGER NOT NULL DEFAULT 0, sleep INTEGER NOT NULL DEFAULT 0, workout INTEGER NOT NULL DEFAULT 0, study INTEGER NOT NULL DEFAULT 0, updated_at TEXT, PRIMARY KEY (user_id, date))'
+  );
+
   const cols = await tableColumns(db, 'checkins');
   if (cols.length && !cols.includes('user_id')) {
-    await db.exec(`
-      CREATE TABLE IF NOT EXISTS checkins_v2 (
-        user_id TEXT NOT NULL,
-        date TEXT NOT NULL,
-        water INTEGER NOT NULL DEFAULT 0,
-        sleep INTEGER NOT NULL DEFAULT 0,
-        workout INTEGER NOT NULL DEFAULT 0,
-        study INTEGER NOT NULL DEFAULT 0,
-        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-        PRIMARY KEY (user_id, date)
+    await run(
+      db,
+      'CREATE TABLE IF NOT EXISTS checkins_v2 (user_id TEXT NOT NULL, date TEXT NOT NULL, water INTEGER NOT NULL DEFAULT 0, sleep INTEGER NOT NULL DEFAULT 0, workout INTEGER NOT NULL DEFAULT 0, study INTEGER NOT NULL DEFAULT 0, updated_at TEXT, PRIMARY KEY (user_id, date))'
+    );
+    try {
+      await run(
+        db,
+        "INSERT OR IGNORE INTO checkins_v2 (user_id, date, water, sleep, workout, study, updated_at) SELECT '1', date, water, sleep, workout, study, updated_at FROM checkins"
       );
-      INSERT OR IGNORE INTO checkins_v2 (user_id, date, water, sleep, workout, study, updated_at)
-      SELECT '1', date, water, sleep, workout, study, COALESCE(updated_at, datetime('now')) FROM checkins;
-      DROP TABLE checkins;
-      ALTER TABLE checkins_v2 RENAME TO checkins;
-    `);
+    } catch {
+      /* old table shape may differ; start clean */
+    }
+    await run(db, 'DROP TABLE checkins');
+    await run(db, 'ALTER TABLE checkins_v2 RENAME TO checkins');
   }
 }
 
@@ -101,13 +86,10 @@ export async function getDisplayName(db, userId) {
 export async function setDisplayName(db, userId, name) {
   const displayName = normalizeName(name);
   if (!displayName) return getDisplayName(db, userId);
-  await db.prepare(
-    `INSERT INTO profiles (user_id, display_name, updated_at)
-     VALUES (?, ?, datetime('now'))
-     ON CONFLICT(user_id) DO UPDATE SET
-       display_name = excluded.display_name,
-       updated_at = datetime('now')`
-  )
+  await db
+    .prepare(
+      'INSERT INTO profiles (user_id, display_name, updated_at) VALUES (?, ?, datetime(\'now\')) ON CONFLICT(user_id) DO UPDATE SET display_name = excluded.display_name, updated_at = datetime(\'now\')'
+    )
     .bind(userId, displayName)
     .run();
   return displayName;
