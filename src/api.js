@@ -18,6 +18,20 @@ function writeLocal(map) {
   localStorage.setItem(LOCAL_KEY, JSON.stringify(map));
 }
 
+async function readError(res, fallback) {
+  let code = fallback;
+  try {
+    const data = await res.json();
+    if (data?.error) code = data.error;
+  } catch {
+    /* ignore */
+  }
+  const err = new Error(code);
+  err.status = res.status;
+  err.code = code;
+  throw err;
+}
+
 export const demoMode = useLocal();
 
 export async function login(token, name = '') {
@@ -38,11 +52,7 @@ export async function login(token, name = '') {
     credentials: 'include',
     body: JSON.stringify({ token, name })
   });
-  if (!res.ok) {
-    const err = new Error('unauthorized');
-    err.status = res.status;
-    throw err;
-  }
+  if (!res.ok) await readError(res, 'unauthorized');
   return res.json();
 }
 
@@ -72,12 +82,7 @@ export async function fetchCheckins(from, to) {
   const res = await fetch(`/api/checkins?from=${from}&to=${to}`, {
     credentials: 'include'
   });
-  if (res.status === 401) {
-    const err = new Error('unauthorized');
-    err.status = 401;
-    throw err;
-  }
-  if (!res.ok) throw new Error('fetch_failed');
+  if (!res.ok) await readError(res, 'fetch_failed');
   const data = await res.json();
   return {
     checkins: data.checkins || [],
@@ -99,12 +104,7 @@ export async function saveCheckin(row) {
     credentials: 'include',
     body: JSON.stringify(row)
   });
-  if (res.status === 401) {
-    const err = new Error('unauthorized');
-    err.status = 401;
-    throw err;
-  }
-  if (!res.ok) throw new Error('save_failed');
+  if (!res.ok) await readError(res, 'save_failed');
   return (await res.json()).checkin;
 }
 
@@ -113,6 +113,7 @@ export async function saveDisplayName(name) {
   if (!trimmed) {
     const err = new Error('invalid_name');
     err.status = 400;
+    err.code = 'invalid_name';
     throw err;
   }
   if (demoMode) {
@@ -125,12 +126,7 @@ export async function saveDisplayName(name) {
     credentials: 'include',
     body: JSON.stringify({ name: trimmed })
   });
-  if (res.status === 401) {
-    const err = new Error('unauthorized');
-    err.status = 401;
-    throw err;
-  }
-  if (!res.ok) throw new Error('save_name_failed');
+  if (!res.ok) await readError(res, 'save_name_failed');
   const data = await res.json();
   return data.displayName || trimmed;
 }

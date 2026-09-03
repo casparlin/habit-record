@@ -12,8 +12,8 @@ async function submit() {
   loading.value = true;
   try {
     const { login } = await import('../api.js');
-    await login(token.value.trim(), name.value.trim());
-    emit('success');
+    const result = await login(token.value.trim(), name.value.trim());
+    emit('success', result || {});
   } catch {
     error.value = 'Token 不正确';
   } finally {

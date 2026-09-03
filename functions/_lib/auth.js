@@ -74,30 +74,26 @@ export async function getAuthUserId(context) {
   return String(userNum);
 }
 
-export function sessionCookieHeader(value, requestUrl) {
-  const https = requestUrl.startsWith('https:');
+function cookieFlags(requestUrl, maxAge) {
+  const https = String(requestUrl || '').startsWith('https:');
+  const expires = new Date(Date.now() + maxAge * 1000).toUTCString();
   const parts = [
-    `${COOKIE}=${encodeURIComponent(value)}`,
-    'HttpOnly',
-    'SameSite=Strict',
     'Path=/',
-    `Max-Age=${MAX_AGE}`
+    `Max-Age=${maxAge}`,
+    `Expires=${expires}`,
+    'HttpOnly',
+    'SameSite=Lax'
   ];
   if (https) parts.push('Secure');
-  return parts.join('; ');
+  return parts;
+}
+
+export function sessionCookieHeader(value, requestUrl) {
+  return [`${COOKIE}=${encodeURIComponent(value)}`, ...cookieFlags(requestUrl, MAX_AGE)].join('; ');
 }
 
 export function clearCookieHeader(requestUrl) {
-  const https = requestUrl.startsWith('https:');
-  const parts = [
-    `${COOKIE}=`,
-    'HttpOnly',
-    'SameSite=Strict',
-    'Path=/',
-    'Max-Age=0'
-  ];
-  if (https) parts.push('Secure');
-  return parts.join('; ');
+  return [`${COOKIE}=`, ...cookieFlags(requestUrl, 0)].join('; ');
 }
 
 export async function requireAuth(context) {

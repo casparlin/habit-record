@@ -10,6 +10,8 @@ const today = localISODate();
 const authed = ref(false);
 const loading = ref(true);
 const saving = ref(false);
+const saved = ref(false);
+const saveError = ref('');
 const tab = ref('overview');
 const selectedDate = ref(today);
 const rows = ref({});
@@ -17,6 +19,7 @@ const displayName = ref('');
 const editingName = ref(false);
 const nameDraft = ref('');
 let saveTimer = null;
+let pendingRow = null;
 
 const TABS = [
   { id: 'overview', label: '总览' },
@@ -34,8 +37,14 @@ const TAB_HINT = {
   study: '学习 · 橙色表示已完成'
 };
 
+const BINARY_TABS = new Set(['sleep', 'workout', 'study']);
 const rangeFrom = addDays(today, -370);
-const legend = computed(() => PALETTES[tab.value] || PALETTES.overview);
+const isBinaryTab = computed(() => BINARY_TABS.has(tab.value));
+const legend = computed(() => {
+  const palette = PALETTES[tab.value] || PALETTES.overview;
+  if (isBinaryTab.value) return [palette[0], palette[4]];
+  return palette;
+});
 
 const selectedRow = computed(() => rows.value[selectedDate.value] || emptyDay(selectedDate.value));
 const streak = computed(() => streakFrom(rows.value, today, tab.value));
@@ -49,24 +58,37 @@ const yearDays = computed(() => {
   return { active: n };
 });
 
+function explainError(err) {
+  if (!err) return '';
+  if (err.code === 'db_unbound' || err.message === 'db_unbound') {
+    return '数据库没绑定：打卡不会写进云端。请在 Cloudflare Pages Settings → Bindings 把 D1 绑成变量名 DB。';
+  }
+  if (err.status === 401) return '';
+  return '保存失败，请再点一次或刷新重试';
+}
+
 async function load() {
   loading.value = true;
   try {
     const data = await fetchCheckins(rangeFrom, today);
-    const list = data.checkins || data;
+    const list = data.checkins || [];
     const map = {};
     for (const row of list) map[row.date] = row;
     rows.value = map;
     if (data.displayName) displayName.value = data.displayName;
+    saveError.value = '';
     authed.value = true;
   } catch (err) {
     if (err.status === 401) authed.value = false;
+    else saveError.value = explainError(err);
   } finally {
     loading.value = false;
   }
 }
 
-function onLogin() {
+function onLogin(result = {}) {
+  if (result.displayName) displayName.value = result.displayName;
+  if (result.dbError) saveError.value = explainError({ code: result.dbError });
   authed.value = true;
   load();
 }
@@ -90,22 +112,35 @@ async function commitName() {
     displayName.value = await saveDisplayName(next);
   } catch (err) {
     if (err.status === 401) authed.value = false;
+    else saveError.value = explainError(err);
+  }
+}
+
+async function flushSave() {
+  if (!pendingRow) return;
+  const row = pendingRow;
+  pendingRow = null;
+  saving.value = true;
+  saved.value = false;
+  try {
+    await saveCheckin(row);
+    saveError.value = '';
+    saved.value = true;
+  } catch (err) {
+    if (err.status === 401) authed.value = false;
+    else saveError.value = explainError(err);
+  } finally {
+    saving.value = false;
   }
 }
 
 function updateRow(next) {
   rows.value = { ...rows.value, [next.date]: next };
+  pendingRow = next;
   saving.value = true;
+  saved.value = false;
   clearTimeout(saveTimer);
-  saveTimer = setTimeout(async () => {
-    try {
-      await saveCheckin(next);
-    } catch (err) {
-      if (err.status === 401) authed.value = false;
-    } finally {
-      saving.value = false;
-    }
-  }, 350);
+  saveTimer = setTimeout(flushSave, 250);
 }
 
 watch(selectedDate, () => {
@@ -118,9 +153,16 @@ onMounted(() => {
   if (demoMode && locallyAuthed()) authed.value = true;
   if (authed.value || !demoMode) load();
   else loading.value = false;
+  window.addEventListener('pagehide', flushSave);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushSave();
+  });
 });
 
-onUnmounted(() => clearTimeout(saveTimer));
+onUnmounted(() => {
+  clearTimeout(saveTimer);
+  window.removeEventListener('pagehide', flushSave);
+});
 </script>
 
 <template>
@@ -148,6 +190,7 @@ onUnmounted(() => clearTimeout(saveTimer));
           <span>·</span>
           <span>{{ demoMode ? '本地预览' : '会话 30 天' }}</span>
           <span v-if="saving">· 保存中</span>
+          <span v-else-if="saved" class="text-[#3fb950]">· 已写入云端</span>
         </div>
       </div>
       <div class="flex items-center gap-2">
@@ -168,6 +211,10 @@ onUnmounted(() => clearTimeout(saveTimer));
         </button>
       </div>
     </header>
+
+    <p v-if="saveError" class="mb-4 rounded-md border border-[#f85149]/40 bg-[#f85149]/10 px-3 py-2 text-sm text-[#f85149]">
+      {{ saveError }}
+    </p>
 
     <TodayPanel :row="selectedRow" :today="today" @update="updateRow" />
 
@@ -199,14 +246,14 @@ onUnmounted(() => clearTimeout(saveTimer));
       </div>
 
       <div class="mt-3 flex items-center gap-2 text-[11px] text-gh-muted">
-        <span>少</span>
+        <span>{{ isBinaryTab ? '未完成' : '少' }}</span>
         <span
           v-for="(c, i) in legend"
           :key="i"
           class="inline-block h-2.5 w-2.5 rounded-[2px] border border-[#1c2128]"
           :style="{ background: c }"
         />
-        <span>多</span>
+        <span>{{ isBinaryTab ? '完成' : '多' }}</span>
       </div>
     </section>
   </div>
