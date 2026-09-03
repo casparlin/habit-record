@@ -15,10 +15,14 @@ async function submit() {
     const result = await login(token.value.trim(), name.value.trim());
     emit('success', result || {});
   } catch (err) {
-    if (err?.code === 'no_tokens_configured' || err?.message === 'no_tokens_configured') {
-      error.value = 'Cloudflare 里还没配 Token 变量。请在 Pages → Settings → Variables and Secrets 加 SECRET_ACCESS_TOKEN_1（Production）';
+    if (err?.code === 'no_tokens_configured' || err?.extra?.configuredTokens === 0) {
+      error.value = 'Worker 读不到密钥。请打开 /api/status 看 tokenSlots 是不是空的。';
     } else {
-      error.value = 'Token 不正确，请和 Cloudflare 里的 SECRET_ACCESS_TOKEN_1 逐字对一下';
+      const slots = err?.extra?.configuredTokens;
+      error.value =
+        typeof slots === 'number'
+          ? `未匹配到 Token（Worker 看到 ${slots} 个密钥）`
+          : 'Token 不正确或接口没打通，请先打开 /api/status';
     }
   } finally {
     loading.value = false;

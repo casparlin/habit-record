@@ -20,8 +20,10 @@ function writeLocal(map) {
 
 async function readError(res, fallback) {
   let code = fallback;
+  let extra = {};
   try {
     const data = await res.json();
+    extra = data || {};
     if (data?.error) code = data.error;
   } catch {
     /* ignore */
@@ -29,6 +31,7 @@ async function readError(res, fallback) {
   const err = new Error(code);
   err.status = res.status;
   err.code = code;
+  err.extra = extra;
   throw err;
 }
 
