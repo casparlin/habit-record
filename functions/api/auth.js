@@ -1,5 +1,5 @@
 import {
-  tokenMatches,
+  resolveUserId,
   issueSession,
   sessionCookieHeader,
   clearCookieHeader
@@ -13,16 +13,17 @@ export async function onRequestPost(context) {
   } catch {
     body = {};
   }
-  const token = typeof body.token === 'string' ? body.token : '';
-  const secret = env.SECRET_ACCESS_TOKEN;
-  if (!(await tokenMatches(token, secret))) {
+  const token = typeof body.token === 'string' ? body.token.trim() : '';
+  const userId = await resolveUserId(token, env);
+  if (!userId) {
     return new Response(JSON.stringify({ error: 'unauthorized' }), {
       status: 401,
       headers: { 'Content-Type': 'application/json' }
     });
   }
-  const session = await issueSession(secret);
-  return new Response(JSON.stringify({ ok: true, expiresInDays: 30 }), {
+  const secret = env[`SECRET_ACCESS_TOKEN_${userId}`];
+  const session = await issueSession(secret, userId);
+  return new Response(JSON.stringify({ ok: true, userId, expiresInDays: 30 }), {
     status: 200,
     headers: {
       'Content-Type': 'application/json',

@@ -1,8 +1,10 @@
 CREATE TABLE IF NOT EXISTS checkins (
-  date TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  date TEXT NOT NULL,
   water INTEGER NOT NULL DEFAULT 0,
   sleep INTEGER NOT NULL DEFAULT 0,
   workout INTEGER NOT NULL DEFAULT 0,
   study INTEGER NOT NULL DEFAULT 0,
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (user_id, date)
 );

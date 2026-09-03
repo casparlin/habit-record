@@ -1,5 +1,6 @@
 const COOKIE = 'habit_auth';
 const MAX_AGE = 30 * 24 * 60 * 60;
+const MAX_USERS = 10;
 
 function bytesEq(a, b) {
   if (a.length !== b.length) return false;
@@ -37,23 +38,40 @@ export async function tokenMatches(provided, secret) {
   return bytesEq(a, b);
 }
 
-export async function issueSession(secret) {
+export async function resolveUserId(token, env) {
+  if (!token || !env) return null;
+  for (let i = 1; i <= MAX_USERS; i++) {
+    const secret = env[`SECRET_ACCESS_TOKEN_${i}`];
+    if (secret && (await tokenMatches(token, secret))) return String(i);
+  }
+  return null;
+}
+
+export async function issueSession(secret, userId) {
   const exp = Math.floor(Date.now() / 1000) + MAX_AGE;
-  const payload = String(exp);
+  const payload = `${userId}.${exp}`;
   const sig = await hmacHex(secret, `habit-session:${payload}`);
   return `${payload}.${sig}`;
 }
 
-export async function sessionValid(cookieValue, secret) {
-  if (!cookieValue || !secret) return false;
-  const [payload, sig] = cookieValue.split('.');
-  if (!payload || !sig) return false;
-  const exp = Number(payload);
-  if (!Number.isFinite(exp) || exp < Math.floor(Date.now() / 1000)) return false;
-  const expected = await hmacHex(secret, `habit-session:${payload}`);
+export async function getAuthUserId(context) {
+  const { request, env } = context;
+  const raw = parseCookie(request.headers.get('Cookie') || '', COOKIE);
+  if (!raw) return null;
+  const parts = raw.split('.');
+  if (parts.length !== 3) return null;
+  const [userId, expRaw, sig] = parts;
+  const userNum = Number(userId);
+  if (!Number.isInteger(userNum) || userNum < 1 || userNum > MAX_USERS) return null;
+  const exp = Number(expRaw);
+  if (!Number.isFinite(exp) || exp < Math.floor(Date.now() / 1000)) return null;
+  const secret = env[`SECRET_ACCESS_TOKEN_${userId}`];
+  if (!secret) return null;
+  const expected = await hmacHex(secret, `habit-session:${userId}.${expRaw}`);
   const a = new TextEncoder().encode(sig);
   const b = new TextEncoder().encode(expected);
-  return bytesEq(a, b);
+  if (!bytesEq(a, b)) return null;
+  return String(userNum);
 }
 
 export function sessionCookieHeader(value, requestUrl) {
@@ -83,14 +101,12 @@ export function clearCookieHeader(requestUrl) {
 }
 
 export async function requireAuth(context) {
-  const { request, env } = context;
-  const secret = env.SECRET_ACCESS_TOKEN;
-  const raw = parseCookie(request.headers.get('Cookie') || '', COOKIE);
-  if (!(await sessionValid(raw, secret))) {
+  const userId = await getAuthUserId(context);
+  if (!userId) {
     return new Response(JSON.stringify({ error: 'unauthorized' }), {
       status: 401,
       headers: { 'Content-Type': 'application/json' }
     });
   }
-  return null;
+  return userId;
 }

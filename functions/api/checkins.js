@@ -6,8 +6,9 @@ async function ensureSchema(db) {
 }
 
 export async function onRequestGet(context) {
-  const denied = await requireAuth(context);
-  if (denied) return denied;
+  const auth = await requireAuth(context);
+  if (auth instanceof Response) return auth;
+  const userId = auth;
   const { request, env } = context;
   if (!env.DB) {
     return new Response(JSON.stringify({ error: 'db_unbound' }), {
@@ -19,24 +20,26 @@ export async function onRequestGet(context) {
   const url = new URL(request.url);
   const from = url.searchParams.get('from');
   const to = url.searchParams.get('to');
-  let sql = 'SELECT date, water, sleep, workout, study, updated_at FROM checkins';
-  const binds = [];
+  let sql =
+    'SELECT date, water, sleep, workout, study, updated_at FROM checkins WHERE user_id = ?';
+  const binds = [userId];
   if (validDate(from) && validDate(to)) {
-    sql += ' WHERE date >= ? AND date <= ?';
+    sql += ' AND date >= ? AND date <= ?';
     binds.push(from, to);
   }
   sql += ' ORDER BY date ASC';
   const { results } = await env.DB.prepare(sql)
     .bind(...binds)
     .all();
-  return new Response(JSON.stringify({ checkins: results || [] }), {
+  return new Response(JSON.stringify({ userId, checkins: results || [] }), {
     headers: { 'Content-Type': 'application/json' }
   });
 }
 
 export async function onRequestPut(context) {
-  const denied = await requireAuth(context);
-  if (denied) return denied;
+  const auth = await requireAuth(context);
+  if (auth instanceof Response) return auth;
+  const userId = auth;
   const { request, env } = context;
   if (!env.DB) {
     return new Response(JSON.stringify({ error: 'db_unbound' }), {
@@ -62,18 +65,18 @@ export async function onRequestPut(context) {
   }
   await ensureSchema(env.DB);
   await env.DB.prepare(
-    `INSERT INTO checkins (date, water, sleep, workout, study, updated_at)
-     VALUES (?, ?, ?, ?, ?, datetime('now'))
-     ON CONFLICT(date) DO UPDATE SET
+    `INSERT INTO checkins (user_id, date, water, sleep, workout, study, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+     ON CONFLICT(user_id, date) DO UPDATE SET
        water = excluded.water,
        sleep = excluded.sleep,
        workout = excluded.workout,
        study = excluded.study,
        updated_at = datetime('now')`
   )
-    .bind(row.date, row.water, row.sleep, row.workout, row.study)
+    .bind(userId, row.date, row.water, row.sleep, row.workout, row.study)
     .run();
-  return new Response(JSON.stringify({ ok: true, checkin: row }), {
+  return new Response(JSON.stringify({ ok: true, userId, checkin: row }), {
     headers: { 'Content-Type': 'application/json' }
   });
 }
