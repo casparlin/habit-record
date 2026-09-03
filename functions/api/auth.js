@@ -36,14 +36,25 @@ export async function onRequestPost(context) {
   } catch {
     body = {};
   }
-  const token = typeof body.token === 'string' ? body.token.trim() : '';
+  const raw =
+    typeof body.token === 'string'
+      ? body.token
+      : typeof body.password === 'string'
+        ? body.password
+        : '';
+  const token = raw.trim();
   const userId = await resolveUserId(token, env);
   if (!userId) {
     const configured = configuredTokenCount(env);
     return json(
       {
         error: configured ? 'unauthorized' : 'no_tokens_configured',
-        configuredTokens: configured
+        configuredTokens: configured,
+        providedLength: token.length,
+        secretLengths: {
+          1: getUserSecret(env, '1').length,
+          2: getUserSecret(env, '2').length
+        }
       },
       { status: 401 }
     );

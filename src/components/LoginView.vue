@@ -15,14 +15,13 @@ async function submit() {
     const result = await login(token.value.trim(), name.value.trim());
     emit('success', result || {});
   } catch (err) {
-    if (err?.code === 'no_tokens_configured' || err?.extra?.configuredTokens === 0) {
-      error.value = 'Worker 读不到密钥。请打开 /api/status 看 tokenSlots 是不是空的。';
+    const extra = err?.extra || {};
+    if (err?.code === 'no_tokens_configured' || extra.configuredTokens === 0) {
+      error.value = 'Worker 读不到密钥。请打开 /api/status 看 tokenSlots。';
+    } else if (extra.secretLengths) {
+      error.value = `未匹配。你输入 ${extra.providedLength} 位，云端 _1=${extra.secretLengths[1]} 位、_2=${extra.secretLengths[2]} 位`;
     } else {
-      const slots = err?.extra?.configuredTokens;
-      error.value =
-        typeof slots === 'number'
-          ? `未匹配到 Token（Worker 看到 ${slots} 个密钥）`
-          : 'Token 不正确或接口没打通，请先打开 /api/status';
+      error.value = 'Token 不正确或接口没打通';
     }
   } finally {
     loading.value = false;
