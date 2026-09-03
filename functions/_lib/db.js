@@ -1,4 +1,4 @@
-export const SCHEMA = `
+export const CHECKINS_SCHEMA = `
 CREATE TABLE IF NOT EXISTS checkins (
   user_id TEXT NOT NULL,
   date TEXT NOT NULL,
@@ -9,12 +9,18 @@ CREATE TABLE IF NOT EXISTS checkins (
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   PRIMARY KEY (user_id, date)
 );
+`;
+
+export const PROFILES_SCHEMA = `
 CREATE TABLE IF NOT EXISTS profiles (
   user_id TEXT PRIMARY KEY,
   display_name TEXT NOT NULL DEFAULT '',
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 `;
+
+export const SCHEMA = `${CHECKINS_SCHEMA}
+${PROFILES_SCHEMA}`;
 
 export function clampInt(value, min, max) {
   const n = Number(value);
@@ -50,13 +56,18 @@ export function fallbackName(userId) {
 }
 
 export async function ensureSchema(db) {
-  await db.exec(SCHEMA);
+  await db.exec(CHECKINS_SCHEMA);
+  await db.exec(PROFILES_SCHEMA);
 }
 
 export async function getDisplayName(db, userId) {
-  const row = await db.prepare('SELECT display_name FROM profiles WHERE user_id = ?').bind(userId).first();
-  const name = row?.display_name ? String(row.display_name).trim() : '';
-  return name || fallbackName(userId);
+  try {
+    const row = await db.prepare('SELECT display_name FROM profiles WHERE user_id = ?').bind(userId).first();
+    const name = row?.display_name ? String(row.display_name).trim() : '';
+    return name || fallbackName(userId);
+  } catch {
+    return fallbackName(userId);
+  }
 }
 
 export async function setDisplayName(db, userId, name) {
