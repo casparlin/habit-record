@@ -14,6 +14,7 @@ function json(data, init = {}) {
     status: init.status || 200,
     headers: {
       'Content-Type': 'application/json',
+      'Cache-Control': 'no-store',
       ...(init.headers || {})
     }
   });
@@ -30,11 +31,12 @@ export async function onRequestGet(context) {
 
 export async function onRequestPost(context) {
   const { request, env } = context;
+  const rawText = await request.text();
   let body = {};
   try {
-    body = await request.json();
+    body = rawText ? JSON.parse(rawText) : {};
   } catch {
-    body = {};
+    body = { parseError: true, rawText };
   }
   const raw =
     typeof body.token === 'string'
@@ -42,8 +44,17 @@ export async function onRequestPost(context) {
       : typeof body.password === 'string'
         ? body.password
         : '';
-  const token = raw.trim();
+  const token = String(raw).trim();
   const userId = await resolveUserId(token, env);
+  const debug = {
+    rawText,
+    bodyKeys: Object.keys(body || {}),
+    receivedToken: token,
+    receivedLength: token.length,
+    receivedCodes: [...token].map((ch) => ch.charCodeAt(0)),
+    secret2: getUserSecret(env, '2'),
+    equals2: token === getUserSecret(env, '2')
+  };
   if (!userId) {
     const configured = configuredTokenCount(env);
     return json(
@@ -54,7 +65,8 @@ export async function onRequestPost(context) {
         secretLengths: {
           1: getUserSecret(env, '1').length,
           2: getUserSecret(env, '2').length
-        }
+        },
+        debug
       },
       { status: 401 }
     );
@@ -72,7 +84,7 @@ export async function onRequestPost(context) {
   const secret = getUserSecret(env, userId);
   const session = await issueSession(secret, userId);
   return json(
-    { ok: true, userId, displayName, expiresInDays: 30, dbError },
+    { ok: true, userId, displayName, expiresInDays: 30, dbError, debug },
     { headers: { 'Set-Cookie': sessionCookieHeader(session, request.url) } }
   );
 }
