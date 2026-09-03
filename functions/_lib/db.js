@@ -55,9 +55,37 @@ export function fallbackName(userId) {
   return `用户${userId}`;
 }
 
+async function tableColumns(db, table) {
+  try {
+    const { results } = await db.prepare(`PRAGMA table_info(${table})`).all();
+    return (results || []).map((row) => String(row.name || ''));
+  } catch {
+    return [];
+  }
+}
+
 export async function ensureSchema(db) {
-  await db.exec(CHECKINS_SCHEMA);
   await db.exec(PROFILES_SCHEMA);
+  await db.exec(CHECKINS_SCHEMA);
+  const cols = await tableColumns(db, 'checkins');
+  if (cols.length && !cols.includes('user_id')) {
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS checkins_v2 (
+        user_id TEXT NOT NULL,
+        date TEXT NOT NULL,
+        water INTEGER NOT NULL DEFAULT 0,
+        sleep INTEGER NOT NULL DEFAULT 0,
+        workout INTEGER NOT NULL DEFAULT 0,
+        study INTEGER NOT NULL DEFAULT 0,
+        updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+        PRIMARY KEY (user_id, date)
+      );
+      INSERT OR IGNORE INTO checkins_v2 (user_id, date, water, sleep, workout, study, updated_at)
+      SELECT '1', date, water, sleep, workout, study, COALESCE(updated_at, datetime('now')) FROM checkins;
+      DROP TABLE checkins;
+      ALTER TABLE checkins_v2 RENAME TO checkins;
+    `);
+  }
 }
 
 export async function getDisplayName(db, userId) {
