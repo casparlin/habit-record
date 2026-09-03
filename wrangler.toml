@@ -1,5 +1,8 @@
-# D1 is bound in Cloudflare Pages → Settings → Bindings.
-# Do not put a fake database_id here; Pages will reject it on deploy.
 name = "habit-record"
 compatibility_date = "2026-09-01"
 pages_build_output_dir = "dist"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "habits"
+database_id = "6ae8b96b-e8af-4cdf-b92a-4c6a753e838e"
