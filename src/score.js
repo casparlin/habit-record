@@ -41,19 +41,30 @@ export function weekdayMon0(iso) {
   return (d.getDay() + 6) % 7;
 }
 
+export const EMPTY = '#161b22';
+
 export const GREEN = ['#161b22', '#0e4429', '#006d32', '#26a641', '#3fb950', '#56d364'];
 export const BLUE = ['#161b22', '#0c2d6b', '#0d419d', '#1158c7', '#1f6feb', '#58a6ff'];
-export const BINARY_ON = '#3fb950';
-export const BINARY_OFF = '#161b22';
+export const YELLOW = ['#161b22', '#3d2f00', '#6e4b00', '#9e6a00', '#d29922', '#e3b341'];
+export const RED = ['#161b22', '#4c1115', '#6e1520', '#a40e26', '#da3633', '#f85149'];
+export const ORANGE = ['#161b22', '#3d1f00', '#6e3200', '#9e4c00', '#db6d28', '#f0883e'];
+
+export const PALETTES = {
+  overview: GREEN,
+  water: BLUE,
+  sleep: YELLOW,
+  workout: RED,
+  study: ORANGE
+};
 
 export function cellColor(tab, row) {
-  if (!row) return BINARY_OFF;
+  if (!row) return EMPTY;
   if (tab === 'overview') return GREEN[dayScore(row)] || GREEN[0];
   if (tab === 'water') return BLUE[row.water] || BLUE[0];
-  if (tab === 'sleep') return row.sleep ? BINARY_ON : BINARY_OFF;
-  if (tab === 'workout') return row.workout ? BINARY_ON : BINARY_OFF;
-  if (tab === 'study') return row.study ? BINARY_ON : BINARY_OFF;
-  return BINARY_OFF;
+  if (tab === 'sleep') return row.sleep ? YELLOW[4] : EMPTY;
+  if (tab === 'workout') return row.workout ? RED[4] : EMPTY;
+  if (tab === 'study') return row.study ? ORANGE[4] : EMPTY;
+  return EMPTY;
 }
 
 export function cellValue(tab, row) {

@@ -4,7 +4,7 @@ import LoginView from './components/LoginView.vue';
 import TodayPanel from './components/TodayPanel.vue';
 import Heatmap from './components/Heatmap.vue';
 import { demoMode, fetchCheckins, locallyAuthed, logout, saveCheckin } from './api.js';
-import { addDays, dayScore, emptyDay, localISODate, streakFrom } from './score.js';
+import { addDays, dayScore, emptyDay, localISODate, PALETTES, streakFrom } from './score.js';
 
 const today = localISODate();
 const authed = ref(false);
@@ -20,10 +20,19 @@ const TABS = [
   { id: 'water', label: '喝水' },
   { id: 'sleep', label: '早睡' },
   { id: 'workout', label: '锻炼' },
-  { id: 'study', label: '晨学' }
+  { id: 'study', label: '学习' }
 ];
 
+const TAB_HINT = {
+  overview: '综合 · 绿色深浅按当日总分 0–5',
+  water: '喝水 · 蓝色深浅按 0–5 杯',
+  sleep: '早睡 · 黄色表示已完成',
+  workout: '锻炼 · 红色表示已完成',
+  study: '学习 · 橙色表示已完成'
+};
+
 const rangeFrom = addDays(today, -370);
+const legend = computed(() => PALETTES[tab.value] || PALETTES.overview);
 
 const selectedRow = computed(() => rows.value[selectedDate.value] || emptyDay(selectedDate.value));
 const streak = computed(() => streakFrom(rows.value, today, tab.value));
@@ -146,11 +155,7 @@ onUnmounted(() => clearTimeout(saveTimer));
         </p>
       </div>
 
-      <p class="mt-3 text-sm text-gh-text">
-        <template v-if="tab === 'overview'">综合 · 颜色按当日总分 0–5</template>
-        <template v-else-if="tab === 'water'">喝水 · 蓝色深浅按 0–5 杯</template>
-        <template v-else>只看这一项有没有完成</template>
-      </p>
+      <p class="mt-3 text-sm text-gh-text">{{ TAB_HINT[tab] }}</p>
 
       <div class="mt-4">
         <Heatmap :tab="tab" :map="rows" :today="today" :selected="selectedDate" @select="selectedDate = $event" />
@@ -159,9 +164,7 @@ onUnmounted(() => clearTimeout(saveTimer));
       <div class="mt-3 flex items-center gap-2 text-[11px] text-gh-muted">
         <span>少</span>
         <span
-          v-for="(c, i) in tab === 'water'
-            ? ['#161b22', '#0c2d6b', '#0d419d', '#1158c7', '#1f6feb', '#58a6ff']
-            : ['#161b22', '#0e4429', '#006d32', '#26a641', '#3fb950', '#56d364']"
+          v-for="(c, i) in legend"
           :key="i"
           class="inline-block h-2.5 w-2.5 rounded-[2px] border border-[#1c2128]"
           :style="{ background: c }"

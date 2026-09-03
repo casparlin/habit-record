@@ -29,7 +29,7 @@ function toggle(key) {
 function formatTitle(iso) {
   const [y, m, d] = iso.split('-');
   const dt = new Date(Number(y), Number(m) - 1, Number(d));
-  const week = '日一二三四五六'[dt.getDay()];
+  const week = '日一二三四五兦'[dt.getDay()];
   return `${y}年${Number(m)}月${Number(d)}日 星期${week}`;
 }
 </script>
@@ -80,7 +80,7 @@ function formatTitle(iso) {
         <button
           type="button"
           class="rounded-lg border px-2 py-3 text-sm transition"
-          :class="row.sleep ? 'border-[#3fb950] bg-[#238636] text-white' : 'border-gh-border text-gh-muted hover:border-[#3fb950]/50'"
+          :class="row.sleep ? 'border-[#d29922] bg-[#9e6a00] text-white' : 'border-gh-border text-gh-muted hover:border-[#d29922]/50'"
           @click="toggle('sleep')"
         >
           <div class="text-lg">{{ row.sleep ? '✓' : '○' }}</div>
@@ -89,7 +89,7 @@ function formatTitle(iso) {
         <button
           type="button"
           class="rounded-lg border px-2 py-3 text-sm transition"
-          :class="row.workout ? 'border-[#3fb950] bg-[#238636] text-white' : 'border-gh-border text-gh-muted hover:border-[#3fb950]/50'"
+          :class="row.workout ? 'border-[#f85149] bg-[#a40e26] text-white' : 'border-gh-border text-gh-muted hover:border-[#f85149]/50'"
           @click="toggle('workout')"
         >
           <div class="text-lg">{{ row.workout ? '✓' : '○' }}</div>
@@ -98,11 +98,11 @@ function formatTitle(iso) {
         <button
           type="button"
           class="rounded-lg border px-2 py-3 text-sm transition"
-          :class="row.study ? 'border-[#3fb950] bg-[#238636] text-white' : 'border-gh-border text-gh-muted hover:border-[#3fb950]/50'"
+          :class="row.study ? 'border-[#f0883e] bg-[#9e4c00] text-white' : 'border-gh-border text-gh-muted hover:border-[#f0883e]/50'"
           @click="toggle('study')"
         >
           <div class="text-lg">{{ row.study ? '✓' : '○' }}</div>
-          晨学
+          学习
         </button>
       </div>
     </div>
