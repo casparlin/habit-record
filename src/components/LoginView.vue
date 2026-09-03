@@ -1,11 +1,21 @@
 <script setup>
-import { ref } from 'vue';
+import { onMounted, ref } from 'vue';
 
 const emit = defineEmits(['success']);
 const name = ref('');
 const token = ref('');
 const error = ref('');
 const loading = ref(false);
+const debug = ref(null);
+
+onMounted(async () => {
+  try {
+    const res = await fetch('/api/status', { credentials: 'include' });
+    debug.value = await res.json();
+  } catch (err) {
+    debug.value = { ok: false, error: String(err) };
+  }
+});
 
 async function submit() {
   error.value = '';
@@ -17,7 +27,7 @@ async function submit() {
   } catch (err) {
     const extra = err?.extra || {};
     if (err?.code === 'no_tokens_configured' || extra.configuredTokens === 0) {
-      error.value = 'Worker 读不到密钥。请打开 /api/status 看 tokenSlots。';
+      error.value = 'Worker 读不到密钥';
     } else if (extra.secretLengths) {
       error.value = `未匹配。你输入 ${extra.providedLength} 位，云端 _1=${extra.secretLengths[1]} 位、_2=${extra.secretLengths[2]} 位`;
     } else {
@@ -64,6 +74,10 @@ async function submit() {
       >
         {{ loading ? '验证中…' : '进入' }}
       </button>
+
+      <pre
+        class="mt-4 max-h-56 overflow-auto whitespace-pre-wrap break-all rounded-md border border-yellow-700/50 bg-black/40 p-3 text-[11px] leading-5 text-yellow-200"
+      >{{ debug ? JSON.stringify(debug, null, 2) : '加载调试信息…' }}</pre>
     </form>
   </div>
 </template>
