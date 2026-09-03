@@ -1,10 +1,5 @@
-# Bind D1 in the Cloudflare dashboard.
-# Do not commit secrets. Put SECRET_ACCESS_TOKEN in Pages env vars.
-name = "harbit_record"
+# D1 is bound in Cloudflare Pages → Settings → Bindings.
+# Do not put a fake database_id here; Pages will reject it on deploy.
+name = "habit-record"
 compatibility_date = "2026-09-01"
 pages_build_output_dir = "dist"
-
-[[d1_databases]]
-binding = "DB"
-database_name = "habits"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
