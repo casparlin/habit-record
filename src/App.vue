@@ -60,11 +60,14 @@ const yearDays = computed(() => {
 
 function explainError(err) {
   if (!err) return '';
-  if (err.code === 'db_unbound' || err.message === 'db_unbound') {
-    return '数据库没绑定：打卡不会写进云端。请在 Cloudflare Pages Settings → Bindings 把 D1 绑成变量名 DB。';
-  }
   if (err.status === 401) return '';
-  return '保存失败，请再点一次或刷新重试';
+  if (err.code === 'db_unbound' || err.message === 'db_unbound') {
+    return '数据库没绑定：打卡不会写进云端。';
+  }
+  const detail = err.extra?.detail || err.message || err.code;
+  return detail && detail !== 'save_failed' && detail !== 'fetch_failed'
+    ? `云端写入失败：${detail}`
+    : '保存失败，请再点一次或刷新重试';
 }
 
 async function load() {
@@ -88,7 +91,7 @@ async function load() {
 
 function onLogin(result = {}) {
   if (result.displayName) displayName.value = result.displayName;
-  if (result.dbError) saveError.value = explainError({ code: result.dbError });
+  if (result.dbError) saveError.value = explainError({ code: result.dbError, message: result.dbError });
   authed.value = true;
   load();
 }
