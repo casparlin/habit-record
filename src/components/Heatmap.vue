@@ -17,6 +17,7 @@ const props = defineProps({
 const emit = defineEmits(['select']);
 
 const WEEKS = 53;
+const WEEKDAYS = ['', '一', '', '三', '', '五', ''];
 
 const cells = computed(() => {
   const mon0 = weekdayMon0(props.today);
@@ -40,22 +41,33 @@ const cells = computed(() => {
 
 const monthLabels = computed(() => {
   const labels = [];
-  let last = '';
+  let lastKey = '';
+  let lastWeek = -10;
   for (let w = 0; w < WEEKS; w++) {
-    const date = cells.value[w * 7]?.date;
-    if (!date) {
-      labels.push('');
-      continue;
-    }
-    const m = date.slice(5, 7);
-    if (m !== last) {
-      labels.push(String(Number(m)) + '月');
-      last = m;
-    } else {
-      labels.push('');
-    }
+    const week = cells.value.slice(w * 7, w * 7 + 7);
+    const first = week.find((cell) => cell.date.slice(8) === '01' && cell.date <= props.today);
+    if (!first) continue;
+    const key = first.date.slice(0, 7);
+    if (key === lastKey) continue;
+    if (w - lastWeek < 2) continue;
+    const year = first.date.slice(0, 4);
+    const month = Number(first.date.slice(5, 7));
+    const showYear = !labels.length || labels[labels.length - 1].year !== year;
+    labels.push({
+      week: w,
+      year,
+      text: showYear ? `${year}/ ${month}月` : `${month}月`
+    });
+    lastKey = key;
+    lastWeek = w;
   }
   return labels;
+});
+
+const rangeText = computed(() => {
+  const first = cells.value.find((cell) => !cell.future)?.date;
+  if (!first) return '';
+  return `${first.slice(0, 7)} → ${props.today.slice(0, 7)} · 右侧是本周`;
 });
 
 function title(cell) {
@@ -67,25 +79,23 @@ function title(cell) {
 </script>
 
 <template>
-  <div class="overflow-x-auto pb-1">
-    <div class="min-w-[720px]">
-      <div class="mb-1 grid gap-[3px] pl-5" style="grid-template-columns: repeat(53, 11px)">
+  <div class="heatmap-wrap overflow-x-auto pb-1">
+    <p class="mb-2 text-[11px] text-gh-muted">{{ rangeText }}</p>
+    <div class="min-w-[760px]">
+      <div class="relative mb-1 h-4 pl-5">
         <span
-          v-for="(label, i) in monthLabels"
-          :key="i"
-          class="h-4 text-[10px] leading-4 text-gh-muted"
-          >{{ label }}</span
-        >
+          v-for="label in monthLabels"
+          :key="label.week + label.text"
+          class="absolute top-0 whitespace-nowrap text-[10px] leading-4 text-gh-muted"
+          :style="{ left: `calc(1.25rem + ${label.week} * (var(--hm-size) + var(--hm-gap)))` }"
+        >{{ label.text }}</span>
       </div>
-      <div class="flex gap-1">
-        <div class="flex w-4 flex-col justify-between py-[1px] text-[10px] text-gh-muted">
-          <span></span>
-          <span>一</span>
-          <span></span>
-          <span>三</span>
-          <span></span>
-          <span>五</span>
-          <span></span>
+      <div class="flex items-start gap-1">
+        <div
+          class="grid w-4 shrink-0 text-[10px] leading-none text-gh-muted"
+          :style="{ gridTemplateRows: 'repeat(7, var(--hm-size))', gap: 'var(--hm-gap)' }"
+        >
+          <span v-for="(d, i) in WEEKDAYS" :key="i" class="flex items-center">{{ d }}</span>
         </div>
         <div class="heatmap-grid">
           <button
