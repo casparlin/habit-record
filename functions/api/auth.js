@@ -4,6 +4,7 @@ import {
   sessionCookieHeader,
   clearCookieHeader
 } from '../_lib/auth.js';
+import { ensureSchema, getDisplayName, normalizeName, setDisplayName } from '../_lib/db.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -21,9 +22,15 @@ export async function onRequestPost(context) {
       headers: { 'Content-Type': 'application/json' }
     });
   }
+  if (env.DB) {
+    await ensureSchema(env.DB);
+    const incoming = normalizeName(body.name);
+    if (incoming) await setDisplayName(env.DB, userId, incoming);
+  }
+  const displayName = env.DB ? await getDisplayName(env.DB, userId) : `用户${userId}`;
   const secret = env[`SECRET_ACCESS_TOKEN_${userId}`];
   const session = await issueSession(secret, userId);
-  return new Response(JSON.stringify({ ok: true, userId, expiresInDays: 30 }), {
+  return new Response(JSON.stringify({ ok: true, userId, displayName, expiresInDays: 30 }), {
     status: 200,
     headers: {
       'Content-Type': 'application/json',

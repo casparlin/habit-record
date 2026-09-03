@@ -1,9 +1,5 @@
 import { requireAuth } from '../_lib/auth.js';
-import { SCHEMA, normalizeRow, validDate } from '../_lib/db.js';
-
-async function ensureSchema(db) {
-  await db.exec(SCHEMA);
-}
+import { ensureSchema, getDisplayName, normalizeRow, validDate } from '../_lib/db.js';
 
 export async function onRequestGet(context) {
   const auth = await requireAuth(context);
@@ -31,7 +27,8 @@ export async function onRequestGet(context) {
   const { results } = await env.DB.prepare(sql)
     .bind(...binds)
     .all();
-  return new Response(JSON.stringify({ userId, checkins: results || [] }), {
+  const displayName = await getDisplayName(env.DB, userId);
+  return new Response(JSON.stringify({ userId, displayName, checkins: results || [] }), {
     headers: { 'Content-Type': 'application/json' }
   });
 }

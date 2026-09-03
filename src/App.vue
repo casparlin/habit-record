@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import LoginView from './components/LoginView.vue';
 import TodayPanel from './components/TodayPanel.vue';
 import Heatmap from './components/Heatmap.vue';
-import { demoMode, fetchCheckins, locallyAuthed, logout, saveCheckin } from './api.js';
+import { demoMode, fetchCheckins, locallyAuthed, logout, saveCheckin, saveDisplayName } from './api.js';
 import { addDays, dayScore, emptyDay, localISODate, PALETTES, streakFrom } from './score.js';
 
 const today = localISODate();
@@ -13,6 +13,9 @@ const saving = ref(false);
 const tab = ref('overview');
 const selectedDate = ref(today);
 const rows = ref({});
+const displayName = ref('');
+const editingName = ref(false);
+const nameDraft = ref('');
 let saveTimer = null;
 
 const TABS = [
@@ -49,10 +52,12 @@ const yearDays = computed(() => {
 async function load() {
   loading.value = true;
   try {
-    const list = await fetchCheckins(rangeFrom, today);
+    const data = await fetchCheckins(rangeFrom, today);
+    const list = data.checkins || data;
     const map = {};
     for (const row of list) map[row.date] = row;
     rows.value = map;
+    if (data.displayName) displayName.value = data.displayName;
     authed.value = true;
   } catch (err) {
     if (err.status === 401) authed.value = false;
@@ -69,6 +74,23 @@ function onLogin() {
 async function onLogout() {
   await logout();
   authed.value = false;
+  displayName.value = '';
+}
+
+function startEditName() {
+  nameDraft.value = displayName.value;
+  editingName.value = true;
+}
+
+async function commitName() {
+  const next = nameDraft.value.trim();
+  editingName.value = false;
+  if (!next || next === displayName.value) return;
+  try {
+    displayName.value = await saveDisplayName(next);
+  } catch (err) {
+    if (err.status === 401) authed.value = false;
+  }
 }
 
 function updateRow(next) {
@@ -108,10 +130,25 @@ onUnmounted(() => clearTimeout(saveTimer));
     <header class="mb-5 flex items-center justify-between gap-3">
       <div>
         <h1 class="text-base font-semibold md:text-lg">习惯打卡</h1>
-        <p class="text-xs text-gh-muted">
-          {{ demoMode ? '本地预览模式 · 数据在浏览器' : '会话 30 天' }}
-          <span v-if="saving"> · 保存中</span>
-        </p>
+        <div class="mt-0.5 flex items-center gap-2 text-xs text-gh-muted">
+          <template v-if="editingName">
+            <input
+              v-model="nameDraft"
+              maxlength="16"
+              class="w-28 rounded border border-gh-border bg-gh-bg px-1.5 py-0.5 text-xs text-gh-text outline-none focus:border-gh-link"
+              @keydown.enter="commitName"
+              @keydown.esc="editingName = false"
+              @blur="commitName"
+            />
+          </template>
+          <button v-else type="button" class="hover:text-gh-text" @click="startEditName">
+            {{ displayName || '未命名' }}
+            <span class="ml-1 text-[10px] text-gh-muted">改名字</span>
+          </button>
+          <span>·</span>
+          <span>{{ demoMode ? '本地预览' : '会话 30 天' }}</span>
+          <span v-if="saving">· 保存中</span>
+        </div>
       </div>
       <div class="flex items-center gap-2">
         <button

@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 
 const emit = defineEmits(['success']);
+const name = ref('');
 const token = ref('');
 const error = ref('');
 const loading = ref(false);
@@ -11,7 +12,7 @@ async function submit() {
   loading.value = true;
   try {
     const { login } = await import('../api.js');
-    await login(token.value.trim());
+    await login(token.value.trim(), name.value.trim());
     emit('success');
   } catch {
     error.value = 'Token 不正确';
@@ -28,8 +29,18 @@ async function submit() {
       @submit.prevent="submit"
     >
       <h1 class="text-lg font-semibold tracking-tight">习惯打卡</h1>
-      <p class="mt-1 text-sm text-gh-muted">会话有效 30 天，可用密码管理器填充。</p>
-      <label class="mt-5 block text-xs text-gh-muted">Access Token</label>
+      <p class="mt-1 text-sm text-gh-muted">会话 30 天。名字绑在你的 Token 上，后面还可以改。</p>
+      <label class="mt-5 block text-xs text-gh-muted">显示名</label>
+      <input
+        v-model="name"
+        type="text"
+        name="username"
+        autocomplete="username"
+        maxlength="16"
+        class="mt-1 w-full rounded-md border border-gh-border bg-gh-bg px-3 py-2 text-sm outline-none focus:border-gh-link"
+        placeholder="例如小 A，可空着"
+      />
+      <label class="mt-4 block text-xs text-gh-muted">Access Token</label>
       <input
         v-model="token"
         type="password"

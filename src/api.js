@@ -1,5 +1,6 @@
 const LOCAL_KEY = 'habit-checkins-v1';
 const LOCAL_AUTH_KEY = 'habit-local-auth';
+const LOCAL_NAME_KEY = 'habit-display-name';
 
 function useLocal() {
   return import.meta.env.DEV || import.meta.env.VITE_LOCAL === '1';
@@ -19,7 +20,7 @@ function writeLocal(map) {
 
 export const demoMode = useLocal();
 
-export async function login(token) {
+export async function login(token, name = '') {
   if (demoMode) {
     if (!token) {
       const err = new Error('unauthorized');
@@ -27,13 +28,15 @@ export async function login(token) {
       throw err;
     }
     localStorage.setItem(LOCAL_AUTH_KEY, '1');
-    return { ok: true, demo: true };
+    const trimmed = String(name || '').trim().slice(0, 16);
+    if (trimmed) localStorage.setItem(LOCAL_NAME_KEY, trimmed);
+    return { ok: true, demo: true, displayName: localStorage.getItem(LOCAL_NAME_KEY) || '本地用户' };
   }
   const res = await fetch('/api/auth', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     credentials: 'include',
-    body: JSON.stringify({ token })
+    body: JSON.stringify({ token, name })
   });
   if (!res.ok) {
     const err = new Error('unauthorized');
@@ -61,7 +64,10 @@ export async function fetchCheckins(from, to) {
     const rows = Object.values(map)
       .filter((r) => r.date >= from && r.date <= to)
       .sort((a, b) => a.date.localeCompare(b.date));
-    return rows;
+    return {
+      checkins: rows,
+      displayName: localStorage.getItem(LOCAL_NAME_KEY) || '本地用户'
+    };
   }
   const res = await fetch(`/api/checkins?from=${from}&to=${to}`, {
     credentials: 'include'
@@ -73,7 +79,11 @@ export async function fetchCheckins(from, to) {
   }
   if (!res.ok) throw new Error('fetch_failed');
   const data = await res.json();
-  return data.checkins || [];
+  return {
+    checkins: data.checkins || [],
+    displayName: data.displayName || `用户${data.userId || ''}`,
+    userId: data.userId
+  };
 }
 
 export async function saveCheckin(row) {
@@ -96,4 +106,31 @@ export async function saveCheckin(row) {
   }
   if (!res.ok) throw new Error('save_failed');
   return (await res.json()).checkin;
+}
+
+export async function saveDisplayName(name) {
+  const trimmed = String(name || '').trim().slice(0, 16);
+  if (!trimmed) {
+    const err = new Error('invalid_name');
+    err.status = 400;
+    throw err;
+  }
+  if (demoMode) {
+    localStorage.setItem(LOCAL_NAME_KEY, trimmed);
+    return trimmed;
+  }
+  const res = await fetch('/api/profile', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ name: trimmed })
+  });
+  if (res.status === 401) {
+    const err = new Error('unauthorized');
+    err.status = 401;
+    throw err;
+  }
+  if (!res.ok) throw new Error('save_name_failed');
+  const data = await res.json();
+  return data.displayName || trimmed;
 }

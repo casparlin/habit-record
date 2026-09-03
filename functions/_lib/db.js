@@ -9,6 +9,11 @@ CREATE TABLE IF NOT EXISTS checkins (
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
   PRIMARY KEY (user_id, date)
 );
+CREATE TABLE IF NOT EXISTS profiles (
+  user_id TEXT PRIMARY KEY,
+  display_name TEXT NOT NULL DEFAULT '',
+  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `;
 
 export function clampInt(value, min, max) {
@@ -30,4 +35,41 @@ export function normalizeRow(input = {}) {
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 export function validDate(date) {
   return DATE_RE.test(date);
+}
+
+export function normalizeName(input) {
+  const name = String(input || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 16);
+  return name;
+}
+
+export function fallbackName(userId) {
+  return `用户${userId}`;
+}
+
+export async function ensureSchema(db) {
+  await db.exec(SCHEMA);
+}
+
+export async function getDisplayName(db, userId) {
+  const row = await db.prepare('SELECT display_name FROM profiles WHERE user_id = ?').bind(userId).first();
+  const name = row?.display_name ? String(row.display_name).trim() : '';
+  return name || fallbackName(userId);
+}
+
+export async function setDisplayName(db, userId, name) {
+  const displayName = normalizeName(name);
+  if (!displayName) return getDisplayName(db, userId);
+  await db.prepare(
+    `INSERT INTO profiles (user_id, display_name, updated_at)
+     VALUES (?, ?, datetime('now'))
+     ON CONFLICT(user_id) DO UPDATE SET
+       display_name = excluded.display_name,
+       updated_at = datetime('now')`
+  )
+    .bind(userId, displayName)
+    .run();
+  return displayName;
 }
