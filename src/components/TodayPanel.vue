@@ -29,7 +29,7 @@ function toggle(key) {
 function formatTitle(iso) {
   const [y, m, d] = iso.split('-');
   const dt = new Date(Number(y), Number(m) - 1, Number(d));
-  const week = '日一二三四五兦'[dt.getDay()];
+  const week = '日一二三四五六'[dt.getDay()];
   return `${y}年${Number(m)}月${Number(d)}日 星期${week}`;
 }
 </script>
