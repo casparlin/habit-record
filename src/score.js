@@ -14,6 +14,13 @@ export function dayScore(row = {}) {
   );
 }
 
+export function habitDone(tab, row) {
+  if (!row) return false;
+  if (tab === 'overview') return dayScore(row) > 0;
+  if (tab === 'water') return (row.water || 0) >= 5;
+  return Boolean(row[tab]);
+}
+
 export function emptyDay(date) {
   return { date, water: 0, sleep: 0, workout: 0, study: 0 };
 }
@@ -75,19 +82,20 @@ export function cellValue(tab, row) {
 }
 
 export function streakFrom(map, today, tab) {
-  const ok = (iso) => {
-    const row = map[iso];
-    if (!row) return false;
-    if (tab === 'overview') return dayScore(row) >= 1;
-    if (tab === 'water') return (row.water || 0) >= 3;
-    return Boolean(row[tab]);
-  };
   let n = 0;
   let cursor = today;
-  if (!ok(cursor)) cursor = addDays(today, -1);
-  while (ok(cursor)) {
+  if (!habitDone(tab, map[cursor])) cursor = addDays(today, -1);
+  while (habitDone(tab, map[cursor])) {
     n += 1;
     cursor = addDays(cursor, -1);
+  }
+  return n;
+}
+
+export function countDone(map, today, tab, days) {
+  let n = 0;
+  for (let i = 0; i < days; i++) {
+    if (habitDone(tab, map[addDays(today, -i)])) n += 1;
   }
   return n;
 }

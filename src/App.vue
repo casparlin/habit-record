@@ -4,7 +4,7 @@ import LoginView from './components/LoginView.vue';
 import TodayPanel from './components/TodayPanel.vue';
 import Heatmap from './components/Heatmap.vue';
 import { demoMode, fetchCheckins, locallyAuthed, logout, saveCheckin, saveDisplayName } from './api.js';
-import { addDays, dayScore, emptyDay, localISODate, PALETTES, streakFrom } from './score.js';
+import { addDays, countDone, dayScore, emptyDay, localISODate, PALETTES, streakFrom } from './score.js';
 
 const today = localISODate();
 const authed = ref(false);
@@ -31,7 +31,7 @@ const TABS = [
 
 const TAB_HINT = {
   overview: '综合 · 绿色深浅按当日总分 0–5',
-  water: '喝水 · 蓝色深浅按 0–5 杯',
+  water: '喝水 · 蓝色深浅按 0–5 杯，满 5 杯算达成',
   sleep: '早睡 · 黄色表示已完成',
   workout: '锻炼 · 红色表示已完成',
   study: '学习 · 橙色表示已完成'
@@ -47,16 +47,11 @@ const legend = computed(() => {
 });
 
 const selectedRow = computed(() => rows.value[selectedDate.value] || emptyDay(selectedDate.value));
-const streak = computed(() => streakFrom(rows.value, today, tab.value));
-const yearDays = computed(() => {
-  let n = 0;
-  for (let i = 0; i < 365; i++) {
-    const d = addDays(today, -i);
-    const row = rows.value[d];
-    if (row && dayScore(row) > 0) n += 1;
-  }
-  return { active: n };
-});
+const streak = computed(() => (tab.value === 'overview' ? 0 : streakFrom(rows.value, today, tab.value)));
+const periodStats = computed(() => ({
+  month: countDone(rows.value, today, tab.value, 30),
+  year: countDone(rows.value, today, tab.value, 365)
+}));
 
 function explainError(err) {
   if (!err) return '';
@@ -236,9 +231,10 @@ onUnmounted(() => {
           </button>
         </div>
         <p class="text-xs text-gh-muted">
-          连续 {{ streak }} 天
+          <span v-if="tab !== 'overview'">连续 {{ streak }} 天达成<span class="mx-1">·</span></span>
+          近一个月达成 {{ periodStats.month }}/30
           <span class="mx-1">·</span>
-          近一年有记录 {{ yearDays.active }} 天
+          近一年达成 {{ periodStats.year }}/365
         </p>
       </div>
 
